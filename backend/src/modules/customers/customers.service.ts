@@ -9,7 +9,7 @@ export interface CreateCustomerInput {
   address?: string;
   originCountry?: string;
   preferredContactChannel?: "sms" | "email" | "messenger";
-  branchId: string;
+  branchId?: string;
 }
 
 export interface UpdateCustomerInput {

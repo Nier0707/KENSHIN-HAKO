@@ -1,0 +1,143 @@
+// KENSHIN HAKO — Prisma schema
+// Milestone 1: Branch, Role, Permission, RolePermission, Employee, AuditLog
+// Milestone 2: Customer, Sender, Receiver
+// Later-milestone entities (Shipment, Payment, etc.) will be added
+// in their own migrations rather than pre-built here, per the phased plan.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Branch {
+  id        String     @id @default(uuid())
+  name      String
+  country   String
+  address   String?
+  phone     String?
+  createdAt DateTime   @default(now()) @map("created_at")
+  employees Employee[]
+  customers Customer[]
+
+  @@map("branches")
+}
+
+model Role {
+  id          String           @id @default(uuid())
+  name        String           @unique // Owner, Branch Staff, Dispatcher, Delivery Rider, Accountant
+  description String?
+  permissions RolePermission[]
+  employees   Employee[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id    String           @id @default(uuid())
+  key   String           @unique // e.g. "shipment.create", "payment.edit"
+  label String
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id")
+  permissionId String     @map("permission_id")
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model Employee {
+  id           String     @id @default(uuid())
+  fullName     String     @map("full_name")
+  email        String     @unique
+  phone        String?
+  passwordHash String     @map("password_hash")
+  roleId       String     @map("role_id")
+  role         Role       @relation(fields: [roleId], references: [id])
+  branchId     String?    @map("branch_id")
+  branch       Branch?    @relation(fields: [branchId], references: [id])
+  isActive     Boolean    @default(true) @map("is_active")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+  auditLogs    AuditLog[]
+  registeredCustomers Customer[]
+
+  @@index([roleId])
+  @@index([branchId])
+  @@map("employees")
+}
+
+model Customer {
+  id                       String    @id @default(uuid())
+  fullName                 String    @map("full_name")
+  phone                    String
+  email                    String?
+  address                  String?
+  originCountry            String?   @map("origin_country")
+  preferredContactChannel  String?   @map("preferred_contact_channel") // sms | email | messenger
+  branchId                 String    @map("branch_id")
+  branch                   Branch    @relation(fields: [branchId], references: [id])
+  registeredByEmployeeId   String?   @map("registered_by_employee_id")
+  registeredByEmployee     Employee? @relation(fields: [registeredByEmployeeId], references: [id])
+  senders                  Sender[]
+  receivers                Receiver[]
+  createdAt                DateTime  @default(now()) @map("created_at")
+  updatedAt                DateTime  @updatedAt @map("updated_at")
+
+  @@index([branchId])
+  @@index([phone])
+  @@map("customers")
+}
+
+model Sender {
+  id             String   @id @default(uuid())
+  customerId     String   @map("customer_id")
+  customer       Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  fullName       String   @map("full_name")
+  phone          String
+  addressAbroad  String   @map("address_abroad")
+  idDocumentRef  String?  @map("id_document_ref")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([customerId])
+  @@map("senders")
+}
+
+model Receiver {
+  id          String    @id @default(uuid())
+  customerId  String?   @map("customer_id") // nullable — receiver may not have a customer account
+  customer    Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  fullName    String    @map("full_name")
+  phone       String
+  addressPh   String    @map("address_ph")
+  region      String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([customerId])
+  @@map("receivers")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  employeeId  String?  @map("employee_id")
+  employee    Employee? @relation(fields: [employeeId], references: [id])
+  action      String   // e.g. "employee.create", "employee.deactivate"
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id")
+  beforeValue Json?    @map("before_value")
+  afterValue  Json?    @map("after_value")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@index([employeeId])
+  @@map("audit_logs")
+}
